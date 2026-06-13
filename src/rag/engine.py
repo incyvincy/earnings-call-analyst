@@ -24,7 +24,7 @@ def _llm():
     from openai import OpenAI
 
     # Groq is OpenAI-compatible — only base_url changes
-    return OpenAI(api_key=settings.groq_api_key, base_url=settings.groq_base_url)
+    return OpenAI(api_key=settings.gemini_api_key, base_url=settings.gemini_base_url)
 
 
 def ask(question: str, where: dict | None = None) -> Answer:

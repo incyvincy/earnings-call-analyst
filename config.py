@@ -29,10 +29,10 @@ class Settings:
     # --- reranker ---
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
-    # --- generation (Groq — free tier, OpenAI-compatible API) ---
-    llm_model: str = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
-    groq_api_key: str = os.getenv("GROQ_API_KEY", "")
-    groq_base_url: str = "https://api.groq.com/openai/v1"
+    # --- generation (Google Gemini — free tier, OpenAI-compatible) ---
+    llm_model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
     # --- vector store (ChromaDB — file-based, no Docker needed) ---
     chroma_path: str = os.getenv("CHROMA_PATH", "./data/chroma")
