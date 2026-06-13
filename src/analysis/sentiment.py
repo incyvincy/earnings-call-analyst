@@ -31,15 +31,22 @@ def sentiment_by_quarter(ticker: str, topic: str | None = None) -> dict[str, flo
     """Return {"Q1 2024": 0.42, ...} averaged sentiment per quarter."""
     c = client()
     hits = get_all(c, where={"ticker": ticker, "section": "prepared"})
+    print(f"[sentiment] ticker={ticker} topic={topic!r} → {len(hits)} prepared hits")
     buckets: dict[str, list[float]] = defaultdict(list)
     clf = _finbert()
+    matched = 0
     for hit in hits:
         text = hit.payload["text"]
         if topic:
             t = topic.lower()
             if t not in text.lower() and t.rstrip("s") not in text.lower():
                 continue
+        matched += 1
         period = f"Q{hit.payload['quarter']} {hit.payload['year']}"
-        signed = _score_to_signed(clf(text[:512])[0])
+        scores = clf(text[:512])
+        # pipeline with top_k=None: single string → list[dict] or list[list[dict]]
+        label_scores = scores[0] if isinstance(scores[0], list) else scores
+        signed = _score_to_signed(label_scores)
         buckets[period].append(signed)
+    print(f"[sentiment] {matched} chunks matched topic filter → periods: {list(buckets.keys())}")
     return {p: round(sum(v) / len(v), 3) for p, v in buckets.items() if v}

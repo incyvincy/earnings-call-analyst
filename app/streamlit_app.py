@@ -40,11 +40,11 @@ with tab_sentiment:
     if st.button("Plot drift") and t:
         series = sentiment_by_quarter(t, topic or None)
         if series:
-            periods = list(series.keys())
+            periods = sorted(series.keys(), key=lambda p: (int(p.split()[1]), int(p[1])))
             vals = [series[p] for p in periods]
             fig = go.Figure(go.Scatter(x=periods, y=vals, mode="lines+markers"))
             fig.update_layout(yaxis_title="sentiment (+pos / -neg)", height=400)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         else:
             st.info("No data — build the index for this ticker first.")
 

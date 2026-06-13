@@ -15,6 +15,17 @@ from src.ingest.transcripts import RawTranscript
 # title, e.g. "Tim Cook, Chief Executive Officer:".
 SPEAKER_RE = re.compile(r"^([A-Z][A-Za-z.\-' ]+(?:,[A-Za-z.\-' ]+)?):\s")
 QA_MARKERS = ("question-and-answer", "q&a", "questions and answers")
+# Phrases that mention Q&A as an upcoming event, not as a section header
+_QA_PROSE = ("following", "will be a", "there will", "during the q&a", "after our prepared")
+
+
+def _strip_markdown(line: str) -> str:
+    """Remove Markdown formatting so the chunker sees plain text."""
+    line = re.sub(r"\*+", "", line)          # **bold** / *italic*
+    line = re.sub(r"^#+\s*", "", line)       # ## Heading
+    line = re.sub(r"^-{3,}$", "", line)      # --- horizontal rule
+    line = re.sub(r"^\d+\.\s+", "", line)    # "5. Q&A Section" → "Q&A Section"
+    return line.strip()
 
 
 @dataclass
@@ -53,14 +64,15 @@ def _split_turns(content: str) -> list[_Turn]:
             buf.clear()
 
     for raw in content.splitlines():
-        line = raw.strip()
+        line = _strip_markdown(raw)
         if not line:
             continue
         low = line.lower()
         if section == "prepared" and any(mk in low for mk in QA_MARKERS):
-            flush()
-            section = "qa"
-            if low.startswith("operator") or "session" in low or "question" in low:
+            # Don't switch on operator prose: "there will be a question-and-answer session"
+            if not any(p in low for p in _QA_PROSE):
+                flush()
+                section = "qa"
                 continue
         m = SPEAKER_RE.match(line)
         if m:
