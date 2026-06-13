@@ -35,8 +35,10 @@ def sentiment_by_quarter(ticker: str, topic: str | None = None) -> dict[str, flo
     clf = _finbert()
     for hit in hits:
         text = hit.payload["text"]
-        if topic and topic.lower() not in text.lower():
-            continue
+        if topic:
+            t = topic.lower()
+            if t not in text.lower() and t.rstrip("s") not in text.lower():
+                continue
         period = f"Q{hit.payload['quarter']} {hit.payload['year']}"
         signed = _score_to_signed(clf(text[:512])[0])
         buckets[period].append(signed)

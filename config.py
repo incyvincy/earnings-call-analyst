@@ -24,7 +24,7 @@ class Settings:
     # "sbert" = all-MiniLM-L6-v2, fast general-purpose retrieval (default)
     # "finbert" = finance-tuned, swap in for domain-embedding experiments
     embed_backend: str = os.getenv("EMBED_BACKEND", "sbert")
-    finbert_model: str = "yiyanghkust/finbert-tone"  # used for sentiment, not retrieval
+    finbert_model: str = "ProsusAI/finbert"  # used for sentiment, not retrieval
 
     # --- reranker ---
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
