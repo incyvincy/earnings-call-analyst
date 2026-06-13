@@ -1,13 +1,13 @@
 """Motley Fool earnings call transcript scraper.
 
-Finds transcripts via DuckDuckGo search, then scrapes the free article.
-No API key needed — all publicly accessible content.
+Finds the transcript by scanning date ranges with lightweight HEAD requests,
+then fetches and parses the free article. No API key needed.
 """
 from __future__ import annotations
 
 import re
 import time
-from urllib.parse import parse_qs, quote, urlparse
+from datetime import date, timedelta
 
 import requests
 from bs4 import BeautifulSoup
@@ -23,40 +23,62 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
+BASE = "https://www.fool.com/earnings/call-transcripts"
 
-def _find_url(ticker: str, year: int, quarter: int) -> str | None:
-    """Search DuckDuckGo for the Motley Fool transcript page."""
-    query = f"site:fool.com/earnings {ticker} Q{quarter} {year} earnings call transcript"
-    search_url = f"https://html.duckduckgo.com/html/?q={quote(query)}"
-    try:
-        resp = requests.get(search_url, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-    except Exception:
+# Motley Fool uses a company-name slug in the URL
+TICKER_SLUG = {
+    "AAPL":  "apple",
+    "MSFT":  "microsoft",
+    "NVDA":  "nvidia",
+    "GOOGL": "alphabet",
+    "GOOG":  "alphabet",
+    "AMZN":  "amazon",
+    "META":  "meta-platforms",
+    "TSLA":  "tesla",
+    "NFLX":  "netflix",
+    "AMD":   "advanced-micro-devices",
+    "INTC":  "intel",
+    "CRM":   "salesforce",
+    "ORCL":  "oracle",
+    "IBM":   "ibm",
+    "QCOM":  "qualcomm",
+}
+
+# For Q{n} {year}, scan dates centred on the typical reporting month
+_QUARTER_CENTER_MONTH = {1: 2, 2: 5, 3: 8, 4: 11}
+
+
+def _scan_for_url(ticker: str, year: int, quarter: int) -> str | None:
+    """Try HEAD requests across a ±90-day window to find the transcript URL."""
+    slug = TICKER_SLUG.get(ticker.upper())
+    if not slug:
+        print(f"  No URL slug mapping for {ticker} — add it to TICKER_SLUG in motleyfool.py")
         return None
 
-    soup = BeautifulSoup(resp.text, "html.parser")
-    pattern = re.compile(r"fool\.com/earnings/call-transcripts/\d{4}/\d{2}/\d{2}/")
+    article_slug = f"{slug}-{ticker.lower()}-q{quarter}-{year}-earnings-call-transcript"
+    center = date(year, _QUARTER_CENTER_MONTH[quarter], 1)
+    start  = center - timedelta(days=90)
+    end    = center + timedelta(days=90)
 
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        # DuckDuckGo wraps result links — unwrap them
-        if "uddg=" in href:
-            parsed = parse_qs(urlparse(href).query)
-            href = parsed.get("uddg", [""])[0]
-        if pattern.search(href):
-            if not href.startswith("http"):
-                href = "https://www.fool.com" + href
-            # Make sure it matches the right quarter and year
-            slug = href.split("/")[-2] if href.endswith("/") else href.split("/")[-1]
-            if f"q{quarter}" in slug and str(year) in slug:
-                return href
-
+    current = start
+    while current <= end:
+        # Skip weekends — earnings calls never happen on Sat/Sun
+        if current.weekday() < 5:
+            url = f"{BASE}/{current.year}/{current.month:02d}/{current.day:02d}/{article_slug}/"
+            try:
+                r = requests.head(url, headers=HEADERS, timeout=5, allow_redirects=True)
+                if r.status_code == 200:
+                    return url
+            except Exception:
+                pass
+            time.sleep(0.05)
+        current += timedelta(days=1)
     return None
 
 
 def _parse_transcript(url: str) -> str | None:
     """Fetch and extract plain text from the article page."""
-    time.sleep(1.5)  # polite crawl delay
+    time.sleep(1.0)
     try:
         resp = requests.get(url, headers=HEADERS, timeout=20)
         resp.raise_for_status()
@@ -64,17 +86,12 @@ def _parse_transcript(url: str) -> str | None:
         return None
 
     soup = BeautifulSoup(resp.text, "html.parser")
-
-    # Remove nav, ads, headers, footers before extracting text
     for tag in soup.find_all(["nav", "header", "footer", "script", "style", "aside"]):
         tag.decompose()
 
-    # Motley Fool article body
-    body = (
-        soup.find("div", {"class": re.compile(r"article-body|content-block|tailwind-article-body")})
-        or soup.find("article")
-        or soup.find("main")
-    )
+    body = soup.find("div", class_=re.compile(r"article-body"))
+    if not body:
+        body = soup.find("article") or soup.find("main")
     if not body:
         return None
 
@@ -85,15 +102,15 @@ def _parse_transcript(url: str) -> str | None:
 
 class MotleyFoolSource:
     def fetch(self, ticker: str, year: int, quarter: int) -> RawTranscript | None:
-        print(f"  Searching Motley Fool for {ticker} Q{quarter} {year}...")
-        url = _find_url(ticker, year, quarter)
+        print(f"  Scanning dates for {ticker} Q{quarter} {year}...")
+        url = _scan_for_url(ticker, year, quarter)
         if not url:
-            print(f"  Not found via search — skipping.")
+            print(f"  Not found in date window — skipping.")
             return None
-        print(f"  Scraping: {url}")
+        print(f"  Found: {url}")
         text = _parse_transcript(url)
         if not text:
-            print(f"  Could not parse article text.")
+            print(f"  Could not parse article.")
             return None
         return RawTranscript(
             ticker=ticker,
