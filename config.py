@@ -15,7 +15,7 @@ load_dotenv()
 @dataclass(frozen=True)
 class Settings:
     # --- data source ---
-    transcript_source: str = os.getenv("TRANSCRIPT_SOURCE", "fmp")  # fmp | api_ninjas | edgar
+    transcript_source: str = os.getenv("TRANSCRIPT_SOURCE", "motleyfool")  # motleyfool | local | fmp | edgar
     fmp_api_key: str = os.getenv("FMP_API_KEY", "")
     api_ninjas_key: str = os.getenv("API_NINJAS_KEY", "")
     sec_user_agent: str = os.getenv("SEC_USER_AGENT", "")
